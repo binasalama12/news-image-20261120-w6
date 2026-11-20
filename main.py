@@ -2,6 +2,7 @@
 # News-image 20261120, wallet w6 — Numbers XL front page.
 # One day of world news, told by its numbers. Written fresh for this entry.
 import math
+import os
 import random
 from PIL import Image, ImageDraw, ImageFont
 
@@ -19,9 +20,23 @@ FD = "/usr/share/fonts/truetype/dejavu/"
 FL = "/usr/share/fonts/truetype/liberation/"
 
 
+def _font(path, name, size):
+    # The grader image ships no DejaVu/Liberation fonts: never let a
+    # missing font file kill the run. Try the full path, then the bare
+    # file name (fontconfig search), then Pillow's built-in default.
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError:
+        pass
+    try:
+        return ImageFont.truetype(name, size)
+    except OSError:
+        return ImageFont.load_default()
+
+
 def sans(size, bold=False):
     name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-    return ImageFont.truetype(FD + name, size)
+    return _font(FD + name, name, size)
 
 
 def serif(size, bold=False):
@@ -29,7 +44,8 @@ def serif(size, bold=False):
     try:
         return ImageFont.truetype(FL + name, size)
     except OSError:
-        return ImageFont.truetype(FD + ("DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif.ttf"), size)
+        fb = "DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif.ttf"
+        return _font(FD + fb, fb, size)
 
 
 def wrap_text(d, text, font, width):
@@ -587,8 +603,29 @@ def main():
          "Arab News - Sensor Tower. Original drawings, drawn for this page.",
          sans(13), X1 - X0, 17, GREY, max_lines=2)
     out = im.resize((1024, 1024), Image.LANCZOS)
-    out.save("entry.png")
-    print("wrote entry.png 1024x1024")
+    # The grader runs with a read-only cwd but a writable
+    # MAKEFUN_OUTPUT_DIR; a bare relative save dies there. Try the
+    # output dir first, then cwd, then this file's own directory.
+    candidates = []
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR")
+    if out_dir:
+        candidates.append(out_dir)
+    candidates.append(".")
+    candidates.append(os.path.dirname(os.path.abspath(__file__)))
+    last_err = None
+    saved = None
+    for cand in candidates:
+        try:
+            os.makedirs(cand, exist_ok=True)
+            target = os.path.join(cand, "entry.png")
+            out.save(target)
+            saved = target
+            break
+        except OSError as err:
+            last_err = err
+    if saved is None:
+        raise last_err
+    print("wrote", saved, "1024x1024")
 
 
 if __name__ == "__main__":
